@@ -7,7 +7,7 @@ import minimatch from "minimatch";
 
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
-const OPENAI_API_MODEL: string = core.getInput("OPENAI_API_MODEL");
+const OPENAI_API_MODEL: string = core.getInput("OPENAI_API_MODEL") || "gpt-4o-mini";
 
 const MyOctokit = Octokit.plugin(restEndpointMethods);
 const octokit = new MyOctokit({ auth: GITHUB_TOKEN });
@@ -101,7 +101,7 @@ export async function analyzeCode(parsedDiff: ParsedDiff[], prDetails: PRDetails
       // Only create prompts for added lines, skip deleted lines if not necessary
       if (change.type === "deleted") {
         continue; 
-        // Example: continue; // Uncomment this line if you don't want to review deleted lines
+        // Example: continue; 
       }
 
       const prompt = createPrompt(file.file, change, prDetails);
