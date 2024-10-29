@@ -23,7 +23,9 @@ interface PRDetails {
 
 interface ParsedDiff {
   file: string;
-  changes: Array<{ line: number; content: string }>;
+  changes: Array<{
+    line: number; content: string; type: string; 
+}>;
 }
 
 export async function getPRDetails(): Promise<PRDetails> {
@@ -43,6 +45,17 @@ export async function getPRDetails(): Promise<PRDetails> {
   };
 }
 
+/**
+ * https://github.com/octocat/Hello-World/commit/7fd1a60b01f91b314f59955a4e4d4e80d8edf11d.diff 
+ * diff --git a/README b/README
+index c57eff55..980a0d5f 100644
+--- a/README
++++ b/README
+@@ -1 +1 @@
+-Hello World!
+\ No newline at end of file
++Hello World!
+ */
 export async function getDiff(owner: string, repo: string, pull_number: number): Promise<string | null> {
   const response = await octokit.rest.pulls.get({
     owner,
@@ -56,27 +69,41 @@ export async function getDiff(owner: string, repo: string, pull_number: number):
 }
 
 export function parseDiff(diffText: string): ParsedDiff[] {
+  // Removes the first element of the resulting array,
+  // which is an empty string because the split operation creates an empty string
   const files = diffText.split(/^diff --git/gm).slice(1);
+  
   return files.map((fileDiff) => {
     const [fileHeader, ...contentLines] = fileDiff.split("\n");
     const filePath = fileHeader.match(/b\/(\S+)/)?.[1] ?? "";
 
+  // TODO: I dont know if it is plausible to review both added and deleted lines, see `analyzeCode` function
     const changes = contentLines
-      .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+      .filter((line) => (line.startsWith("+") && !line.startsWith("+++") || line.startsWith("-") && !line.startsWith("---")))
       .map((line, index) => ({
         line: index + 1,
         content: line.slice(1),
+        type: line.startsWith("+") ? "added" : "deleted",
       }));
 
     return { file: filePath, changes };
   });
 }
 
+// TODO: Instead of sending each line individually, it can be bundled by Logical Grouping:
+//  - file/function/class level
+// TODO: Some major line - we can still send them individually to ensure focused attention.
 export async function analyzeCode(parsedDiff: ParsedDiff[], prDetails: PRDetails) {
   const comments: Array<{ body: string; path: string; line: number }> = [];
   for (const file of parsedDiff) {
     if (file.file === "/dev/null") continue;
     for (const change of file.changes) {
+      // Only create prompts for added lines, skip deleted lines if not necessary
+      if (change.type === "deleted") {
+        continue; 
+        // Example: continue; // Uncomment this line if you don't want to review deleted lines
+      }
+
       const prompt = createPrompt(file.file, change, prDetails);
       const aiResponse = await getAIResponse(prompt);
       if (aiResponse) {
@@ -90,9 +117,20 @@ export async function analyzeCode(parsedDiff: ParsedDiff[], prDetails: PRDetails
   return comments;
 }
 
-export function createPrompt(filePath: string, change: { line: number; content: string }, prDetails: PRDetails): string {
+
+export function createPrompt(
+  filePath: string,
+  change: { line: number; content: string; type: string }, 
+  prDetails: PRDetails
+): string {
+  const changeDescription = change.type === "added" 
+  ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. \
+  Does this code improve the existing functionality or introduce potential issues?"
+  : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality,\
+   introduce bugs, or remove important logic. Is this deletion justified and safe?";
+
   return `Your task is to review pull requests. Instructions:
-- Provide the response in following JSON format: {"lineNumber":  <line_number>, "reviewComment": "<review comment>"}
+- Provide the response in the following JSON format: {"lineNumber": <line_number>, "reviewComment": "<review comment>"}
 - Provide suggestions only if there's something to improve.
 
 Pull request title: ${prDetails.title}
@@ -101,6 +139,7 @@ Pull request description:
 ${prDetails.description}
 
 Code diff to review in ${filePath}:
+${changeDescription}
 
 \`\`\`diff
 ${change.line} ${change.content}
@@ -108,7 +147,7 @@ ${change.line} ${change.content}
 `;
 }
 
-export async function getAIResponse(prompt: string): Promise<{ lineNumber: string; reviewComment: string }[] | null> {
+export async function getAIResponse(prompt: string): Promise<{ lineNumber: string; reviewComment: string }[] | any> {
   const disclaimer = "📌 **Note**: This is an AI-generated comment.";
   const queryConfig = {
     model: OPENAI_API_MODEL,
@@ -123,7 +162,7 @@ export async function getAIResponse(prompt: string): Promise<{ lineNumber: strin
     const completion = await openai.chat.completions.create({
       ...queryConfig,
       messages: [
-        { role: "system", content: "You are a helpful assistant for reviewing code changes." },
+        { role: "system", content: "You are a helpful assistant for reviewing github Pull Request code changes." },
         { role: "user", content: prompt },
       ],
     });
@@ -140,7 +179,7 @@ export async function getAIResponse(prompt: string): Promise<{ lineNumber: strin
       }));
     } else {
       console.warn("Unexpected response format:", responseContent);
-      return null;
+      return responseContent;
     }
   } catch (error) {
     console.error("OpenAI API error:", error);
