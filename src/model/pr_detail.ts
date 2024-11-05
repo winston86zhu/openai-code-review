@@ -4,4 +4,4 @@ export interface PRDetails {
     pull_number: number;
     title: string;
     description: string;
-}
+  }

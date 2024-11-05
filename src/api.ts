@@ -4,22 +4,16 @@ import OpenAI from "openai";
 import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import minimatch from "minimatch";
+import { PRDetails } from "./model/pr_detail";
 
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
 const OPENAI_API_MODEL: string = core.getInput("OPENAI_API_MODEL") || "gpt-4o-mini";
+const ANALYSIS_MODE: string = core.getInput("ANALYSIS_MODE") || "line_by_line";
 
 const MyOctokit = Octokit.plugin(restEndpointMethods);
 const octokit = new MyOctokit({ auth: GITHUB_TOKEN });
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-
-export interface PRDetails {
-  owner: string;
-  repo: string;
-  pull_number: number;
-  title: string;
-  description: string;
-}
 
 export interface ParsedDiff {
   file: string;
@@ -43,6 +37,33 @@ export async function getPRDetails(): Promise<PRDetails> {
     title: prResponse.data.title || "",
     description: prResponse.data.body || "",
   };
+}
+
+export async function getFullFileContent(filePath: string, prDetails: PRDetails): Promise<string> {
+  try {
+    // Fetch the file content from the PR head branch
+    const response = await octokit.rest.repos.getContent({
+      owner: prDetails.owner,
+      repo: prDetails.repo,
+      path: filePath,
+      ref: `refs/pull/${prDetails.pull_number}/head`,
+    });
+
+    if (Array.isArray(response.data)) {
+      throw new Error(`Expected a file but found a directory at path: ${filePath}`);
+    }
+
+    // Check if response.data is of type 'file'
+    if (response.data.type !== 'file') {
+      throw new Error(`Expected a file but found type '${response.data.type}' at path: ${filePath}`);
+    }
+
+    const content = Buffer.from(response.data.content, 'base64').toString('utf8');
+    return content;
+  } catch (error) {
+    console.error(`Error fetching file content for ${filePath}:`, error);
+    throw error;
+  }
 }
 
 /**
