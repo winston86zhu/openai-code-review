@@ -1,6 +1,7 @@
 // tests/createPrompt.test.ts
 
-import { createPrompt, PRDetails } from '../src/api';
+import { createPrompt } from '../src/api';
+import { PRDetails } from '../src/model/pr_detail';
 
 describe('createPrompt', () => {
   it('should create the correct prompt for added lines', () => {

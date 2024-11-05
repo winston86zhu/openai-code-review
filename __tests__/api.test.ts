@@ -1,4 +1,5 @@
 import * as apiModule from '../src/api';
+import { PRDetails } from '../src/model/pr_detail';
 
 describe("analyzeCode with dependency injection", () => {
   it("should analyze code and return comments for added lines", async () => {
@@ -11,7 +12,7 @@ describe("analyzeCode with dependency injection", () => {
       },
     ];
 
-    const prDetails: apiModule.PRDetails = {
+    const prDetails: PRDetails = {
       owner: "octocat",
       repo: "Hello-World",
       pull_number: 1,
