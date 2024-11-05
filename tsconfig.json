@@ -1,12 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "CommonJS",
-    "strict": true,
+    "module": "commonjs",
+    "target": "es6",
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "outDir": "./dist"
+    "allowJs": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "babel.config.cjs",
+    "jest.config.cjs"
+  ]
 }

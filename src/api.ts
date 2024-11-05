@@ -13,7 +13,7 @@ const MyOctokit = Octokit.plugin(restEndpointMethods);
 const octokit = new MyOctokit({ auth: GITHUB_TOKEN });
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-interface PRDetails {
+export interface PRDetails {
   owner: string;
   repo: string;
   pull_number: number;
@@ -21,7 +21,7 @@ interface PRDetails {
   description: string;
 }
 
-interface ParsedDiff {
+export interface ParsedDiff {
   file: string;
   changes: Array<{
     line: number; content: string; type: string; 
@@ -93,22 +93,25 @@ export function parseDiff(diffText: string): ParsedDiff[] {
 // TODO: Instead of sending each line individually, it can be bundled by Logical Grouping:
 //  - file/function/class level
 // TODO: Some major line - we can still send them individually to ensure focused attention.
-export async function analyzeCode(parsedDiff: ParsedDiff[], prDetails: PRDetails) {
+export async function analyzeCode(
+  parsedDiff: ParsedDiff[],
+  prDetails: PRDetails,
+  getAIResponseFn = getAIResponse // Default to original function
+) {
   const comments: Array<{ body: string; path: string; line: number }> = [];
   for (const file of parsedDiff) {
     if (file.file === "/dev/null") continue;
     for (const change of file.changes) {
-      // Only create prompts for added lines, skip deleted lines if not necessary
-      if (change.type === "deleted") {
-        continue; 
-        // Example: continue; 
-      }
-
+      if (change.type === "deleted") continue;
       const prompt = createPrompt(file.file, change, prDetails);
-      const aiResponse = await getAIResponse(prompt);
+      const aiResponse = await getAIResponseFn(prompt);
       if (aiResponse) {
         for (const response of aiResponse) {
-          const newComment = { body: response.reviewComment, path: file.file, line: change.line };
+          const newComment = {
+            body: response.reviewComment,
+            path: file.file,
+            line: change.line,
+          };
           comments.push(newComment);
         }
       }
@@ -220,4 +223,7 @@ async function main() {
   }
 }
 
-main();
+// Run the main function if the script is executed directly, prevent unit tests from running it
+if (require.main === module) {
+  main();
+}

@@ -1,12 +1,16 @@
 {
-  "name": "@winston86zhu/openai-code-reviewer",
+  "name": "@winsston86zhu/openai-code-reviewer",
   "version": "1.0.0",
-  "type": "module",
+  "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
-  "keywords": ["ai", "code-review", "typescript"],
+  "keywords": [
+    "ai",
+    "code-review",
+    "typescript"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/winston86zhu/openai-code-review.git"
@@ -22,6 +26,7 @@
     "@types/minimatch": "^5.1.2",
     "@types/nock": "^11.1.0",
     "@types/node": "^22.7.9",
+    "babel-jest": "^29.7.0",
     "jest": "^29.7.0",
     "nock": "^13.5.5",
     "prettier": "^3.3.3",

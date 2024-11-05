@@ -1,11 +1,11 @@
-// jest.config.cjs
 module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  testMatch: ['**/__tests__/**/*.test.ts'],
   transform: {
-    "^.+\\.tsx?$": "babel-jest",       // Use babel-jest for transforming TypeScript files
+    "^.+\\.(t|j)sx?$": "babel-jest"
   },
-  testEnvironment: "node",
-  moduleFileExtensions: ["ts", "js", "json"],
   transformIgnorePatterns: [
-    "/node_modules/(?!@octokit|@actions|minimatch)",  // Transform @octokit, @actions, and minimatch
+    "node_modules/(?!.*)"
   ],
 };
