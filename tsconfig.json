@@ -10,5 +10,5 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "exclude": ["babel.config.cjs", "jest.config.cjs", "dist", "node_modules", "**/*.test.ts"]
+  "exclude": ["babel.config.cjs", "jest.config.cjs", "node_modules", "**/*.test.ts"]
 }
