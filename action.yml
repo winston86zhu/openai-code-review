@@ -1,0 +1,24 @@
+name: 'AI Code Reviewer'
+description: 'An AI-powered code reviewer using OpenAI GPT models.'
+author: 'Winstin Zhu'
+inputs:
+  GITHUB_TOKEN:
+    description: 'GitHub token'
+    required: true
+  OPENAI_API_KEY:
+    description: 'OpenAI API key'
+    required: true
+  OPENAI_API_MODEL:
+    description: 'OpenAI API model to use (default: gpt-4)'
+    required: false
+    default: 'gpt-4'
+  exclude:
+    description: 'File patterns to exclude'
+    required: false
+    default: '**/*.json, **/*.md'
+runs:
+  using: 'node16'
+  main: 'dist/api.js'
+branding:
+  color: 'blue'
+  icon: 'robot'

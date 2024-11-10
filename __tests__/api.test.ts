@@ -1,5 +1,5 @@
-import * as apiModule from '../src/api';
-import { PRDetails } from '../src/model/pr_detail';
+import * as apiModule from "../src/api";
+import { PRDetails } from "../src/model/pr_detail";
 
 describe("analyzeCode with dependency injection", () => {
   it("should analyze code and return comments for added lines", async () => {
@@ -17,12 +17,19 @@ describe("analyzeCode with dependency injection", () => {
       repo: "Hello-World",
       pull_number: 1,
       title: "Update example.tsx",
-      description: "This pull request updates example.js with new log statements.",
+      description:
+        "This pull request updates example.js with new log statements.",
     };
 
-    const mockGetAIResponse = jest.fn().mockResolvedValueOnce([
-      { lineNumber: "3", reviewComment: "Consider refactoring this line for better readability." },
-    ]);
+    const mockGetAIResponse = jest
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          lineNumber: "3",
+          reviewComment:
+            "Consider refactoring this line for better readability.",
+        },
+      ]);
 
     const expectedComments = [
       {
@@ -32,11 +39,13 @@ describe("analyzeCode with dependency injection", () => {
       },
     ];
 
-    
-    const comments = await apiModule.analyzeCode(parsedDiff, prDetails, mockGetAIResponse);
+    const comments = await apiModule.analyzeCode(
+      parsedDiff,
+      prDetails,
+      mockGetAIResponse,
+    );
     console.log(comments);
     expect(comments).toEqual(expectedComments);
     expect(mockGetAIResponse).toHaveBeenCalledTimes(1);
   });
 });
-

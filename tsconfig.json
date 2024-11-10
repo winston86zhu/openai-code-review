@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
     "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./src",
     "target": "es6",
     "esModuleInterop": true,
     "allowJs": true,
@@ -8,8 +10,5 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "exclude": [
-    "babel.config.cjs",
-    "jest.config.cjs"
-  ]
+  "exclude": ["babel.config.cjs", "jest.config.cjs", "dist", "node_modules", "**/*.test.ts"]
 }

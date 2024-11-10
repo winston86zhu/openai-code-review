@@ -3,12 +3,13 @@ import { PRDetails } from "./model/pr_detail";
 
 export function createPromptLineByLine(
   filePath: string,
-  change: { line: number; content: string; type: string }, 
-  prDetails: PRDetails
+  change: { line: number; content: string; type: string },
+  prDetails: PRDetails,
 ): string {
-  const changeDescription = change.type === "added" 
-    ? "An added line of code is presented below."
-    : "A deleted line of code is presented below.";
+  const changeDescription =
+    change.type === "added"
+      ? "An added line of code is presented below."
+      : "A deleted line of code is presented below.";
 
   return `As a code reviewer, your task is to analyze the provided code change and offer constructive feedback. Please focus on:
 
@@ -56,14 +57,14 @@ ${change.content}
 `;
 }
 
-
 export function createPromptFileByFile(
   filePath: string,
   changes: { line: number; content: string; type: string }[],
   prDetails: PRDetails,
-  fullFileContent: string
+  fullFileContent: string,
 ): string {
-  const changeDescription = "Below are the code changes made to the file. Please review them comprehensively.";
+  const changeDescription =
+    "Below are the code changes made to the file. Please review them comprehensively.";
 
   return `You are an expert code reviewer. Your task is to analyze the code changes made in the file \`${filePath}\` and provide constructive feedback focusing on:
 
@@ -110,21 +111,26 @@ ${fullFileContent}
 `;
 }
 
-
 export function createPromptEverythingTogether(
-  allChanges: { file: string; changes: { line: number; content: string; type: string }[] }[],
-  prDetails: PRDetails
+  allChanges: {
+    file: string;
+    changes: { line: number; content: string; type: string }[];
+  }[],
+  prDetails: PRDetails,
 ): string {
-  const changeDescription = "Below are the code changes made across multiple files. Please review them comprehensively.";
+  const changeDescription =
+    "Below are the code changes made across multiple files. Please review them comprehensively.";
 
-  let diffContent = '';
+  let diffContent = "";
   for (const file of allChanges) {
     diffContent += `--- a/${file.file}\n+++ b/${file.file}\n`;
-    diffContent += file.changes.map(change => {
-      const sign = change.type === "added" ? '+' : '-';
-      return `${sign}${change.content}`;
-    }).join('\n');
-    diffContent += '\n';
+    diffContent += file.changes
+      .map((change) => {
+        const sign = change.type === "added" ? "+" : "-";
+        return `${sign}${change.content}`;
+      })
+      .join("\n");
+    diffContent += "\n";
   }
 
   return `As an experienced code reviewer, your task is to analyze the code changes made across multiple files and provide detailed feedback focusing on:

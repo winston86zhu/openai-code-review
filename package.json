@@ -4,7 +4,10 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "build": "tsc",
+    "lint": "prettier --check . && eslint . --ext .ts",
+    "format": "prettier --write ."
   },
   "keywords": [
     "ai",

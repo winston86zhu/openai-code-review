@@ -8,7 +8,8 @@ import { PRDetails } from "./model/pr_detail";
 
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
-const OPENAI_API_MODEL: string = core.getInput("OPENAI_API_MODEL") || "gpt-4o-mini";
+const OPENAI_API_MODEL: string =
+  core.getInput("OPENAI_API_MODEL") || "gpt-4o-mini";
 const ANALYSIS_MODE: string = core.getInput("ANALYSIS_MODE") || "line_by_line";
 
 const MyOctokit = Octokit.plugin(restEndpointMethods);
@@ -18,12 +19,16 @@ const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 export interface ParsedDiff {
   file: string;
   changes: Array<{
-    line: number; content: string; type: string; 
-}>;
+    line: number;
+    content: string;
+    type: string;
+  }>;
 }
 
 export async function getPRDetails(): Promise<PRDetails> {
-  const { repository, number } = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH || "", "utf8"));
+  const { repository, number } = JSON.parse(
+    readFileSync(process.env.GITHUB_EVENT_PATH || "", "utf8"),
+  );
   const prResponse = await octokit.rest.pulls.get({
     owner: repository.owner.login,
     repo: repository.name,
@@ -39,7 +44,10 @@ export async function getPRDetails(): Promise<PRDetails> {
   };
 }
 
-export async function getFullFileContent(filePath: string, prDetails: PRDetails): Promise<string> {
+export async function getFullFileContent(
+  filePath: string,
+  prDetails: PRDetails,
+): Promise<string> {
   try {
     // Fetch the file content from the PR head branch
     const response = await octokit.rest.repos.getContent({
@@ -50,15 +58,21 @@ export async function getFullFileContent(filePath: string, prDetails: PRDetails)
     });
 
     if (Array.isArray(response.data)) {
-      throw new Error(`Expected a file but found a directory at path: ${filePath}`);
+      throw new Error(
+        `Expected a file but found a directory at path: ${filePath}`,
+      );
     }
 
     // Check if response.data is of type 'file'
-    if (response.data.type !== 'file') {
-      throw new Error(`Expected a file but found type '${response.data.type}' at path: ${filePath}`);
+    if (response.data.type !== "file") {
+      throw new Error(
+        `Expected a file but found type '${response.data.type}' at path: ${filePath}`,
+      );
     }
 
-    const content = Buffer.from(response.data.content, 'base64').toString('utf8');
+    const content = Buffer.from(response.data.content, "base64").toString(
+      "utf8",
+    );
     return content;
   } catch (error) {
     console.error(`Error fetching file content for ${filePath}:`, error);
@@ -77,14 +91,18 @@ index c57eff55..980a0d5f 100644
 \ No newline at end of file
 +Hello World!
  */
-export async function getDiff(owner: string, repo: string, pull_number: number): Promise<string | null> {
+export async function getDiff(
+  owner: string,
+  repo: string,
+  pull_number: number,
+): Promise<string | null> {
   const response = await octokit.rest.pulls.get({
     owner,
     repo,
     pull_number,
     mediaType: { format: "diff" },
   });
-  
+
   // Octokit returns response data as string if media type is "diff"
   return String(response.data);
 }
@@ -93,14 +111,18 @@ export function parseDiff(diffText: string): ParsedDiff[] {
   // Removes the first element of the resulting array,
   // which is an empty string because the split operation creates an empty string
   const files = diffText.split(/^diff --git/gm).slice(1);
-  
+
   return files.map((fileDiff) => {
     const [fileHeader, ...contentLines] = fileDiff.split("\n");
     const filePath = fileHeader.match(/b\/(\S+)/)?.[1] ?? "";
 
-  // TODO: I dont know if it is plausible to review both added and deleted lines, see `analyzeCode` function
+    // TODO: I dont know if it is plausible to review both added and deleted lines, see `analyzeCode` function
     const changes = contentLines
-      .filter((line) => (line.startsWith("+") && !line.startsWith("+++") || line.startsWith("-") && !line.startsWith("---")))
+      .filter(
+        (line) =>
+          (line.startsWith("+") && !line.startsWith("+++")) ||
+          (line.startsWith("-") && !line.startsWith("---")),
+      )
       .map((line, index) => ({
         line: index + 1,
         content: line.slice(1),
@@ -117,7 +139,7 @@ export function parseDiff(diffText: string): ParsedDiff[] {
 export async function analyzeCode(
   parsedDiff: ParsedDiff[],
   prDetails: PRDetails,
-  getAIResponseFn = getAIResponse // Default to original function
+  getAIResponseFn = getAIResponse, // Default to original function
 ) {
   const comments: Array<{ body: string; path: string; line: number }> = [];
   for (const file of parsedDiff) {
@@ -141,16 +163,16 @@ export async function analyzeCode(
   return comments;
 }
 
-
 export function createPrompt(
   filePath: string,
-  change: { line: number; content: string; type: string }, 
-  prDetails: PRDetails
+  change: { line: number; content: string; type: string },
+  prDetails: PRDetails,
 ): string {
-  const changeDescription = change.type === "added" 
-  ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. \
+  const changeDescription =
+    change.type === "added"
+      ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. \
   Does this code improve the existing functionality or introduce potential issues?"
-  : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality,\
+      : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality,\
    introduce bugs, or remove important logic. Is this deletion justified and safe?";
 
   return `Your task is to review pull requests. Instructions:
@@ -171,7 +193,9 @@ ${change.line} ${change.content}
 `;
 }
 
-export async function getAIResponse(prompt: string): Promise<{ lineNumber: string; reviewComment: string }[] | any> {
+export async function getAIResponse(
+  prompt: string,
+): Promise<{ lineNumber: string; reviewComment: string }[] | any> {
   const disclaimer = "📌 **Note**: This is an AI-generated comment.";
   const queryConfig = {
     model: OPENAI_API_MODEL,
@@ -186,18 +210,23 @@ export async function getAIResponse(prompt: string): Promise<{ lineNumber: strin
     const completion = await openai.chat.completions.create({
       ...queryConfig,
       messages: [
-        { role: "system", content: "You are a helpful assistant for reviewing github Pull Request code changes." },
+        {
+          role: "system",
+          content:
+            "You are a helpful assistant for reviewing github Pull Request code changes.",
+        },
         { role: "user", content: prompt },
       ],
     });
 
-    const responseContent = completion.choices[0].message?.content?.trim() || "{}";
+    const responseContent =
+      completion.choices[0].message?.content?.trim() || "{}";
     const parsedResponse = JSON.parse(responseContent);
 
     // Ensure the response is in the expected format
     if (Array.isArray(parsedResponse.reviews)) {
       // Prepend the disclaimer to each review comment
-      return parsedResponse.reviews.map((review: { reviewComment: any; }) => ({
+      return parsedResponse.reviews.map((review: { reviewComment: any }) => ({
         ...review,
         reviewComment: `${disclaimer}\n\n${review.reviewComment}`,
       }));
@@ -211,7 +240,12 @@ export async function getAIResponse(prompt: string): Promise<{ lineNumber: strin
   }
 }
 
-async function createReviewComment(owner: string, repo: string, pull_number: number, comments: Array<{ body: string; path: string; line: number }>) {
+async function createReviewComment(
+  owner: string,
+  repo: string,
+  pull_number: number,
+  comments: Array<{ body: string; path: string; line: number }>,
+) {
   await octokit.rest.pulls.createReview({
     owner,
     repo,
@@ -224,19 +258,34 @@ async function createReviewComment(owner: string, repo: string, pull_number: num
 async function main() {
   try {
     const prDetails = await getPRDetails();
-    const diffText = await getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
+    const diffText = await getDiff(
+      prDetails.owner,
+      prDetails.repo,
+      prDetails.pull_number,
+    );
     if (!diffText) {
       console.log("No diff found");
       return;
     }
 
     const parsedDiff = parseDiff(diffText);
-    const excludePatterns = core.getInput("exclude").split(",").map((s) => s.trim());
-    const filteredDiff = parsedDiff.filter((file) => !excludePatterns.some((pattern) => minimatch(file.file, pattern)));
+    const excludePatterns = core
+      .getInput("exclude")
+      .split(",")
+      .map((s) => s.trim());
+    const filteredDiff = parsedDiff.filter(
+      (file) =>
+        !excludePatterns.some((pattern) => minimatch(file.file, pattern)),
+    );
 
     const comments = await analyzeCode(filteredDiff, prDetails);
     if (comments.length > 0) {
-      await createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
+      await createReviewComment(
+        prDetails.owner,
+        prDetails.repo,
+        prDetails.pull_number,
+        comments,
+      );
     }
   } catch (error) {
     console.error("Error in processing:", error);
