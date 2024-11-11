@@ -18,7 +18,7 @@ inputs:
     default: '**/*.json, **/*.md'
 runs:
   using: 'node20'
-  main: 'dist/api.js'
+  main: "dist/index.js"
 branding:
   color: 'blue'
   icon: 'robot'
