@@ -2,10 +2,10 @@
   "name": "@winsston86zhu/openai-code-reviewer",
   "version": "1.0.0",
   "type": "commonjs",
-  "main": "dist/api.js",
+  "main": "dist/index.js",
   "scripts": {
     "test": "jest",
-    "build": "ncc build --source-map",
+    "build": "ncc build src/api.ts -o dist --source-map",
     "lint": "prettier --check . && eslint . --ext .ts",
     "format": "prettier --write ."
   },
