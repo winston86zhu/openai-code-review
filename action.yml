@@ -17,7 +17,7 @@ inputs:
     required: false
     default: '**/*.json, **/*.md'
 runs:
-  using: 'node16'
+  using: 'node20'
   main: 'dist/api.js'
 branding:
   color: 'blue'
