@@ -3,37 +3,37 @@ import { PRDetails } from "./model/pr_detail";
 
 export function createPromptLineByLine(
   filePath: string,
-  change: { line: number; content: string; type: string }, 
+  change: { line: number; content: string; type: string },
   prDetails: PRDetails
 ): string {
-    const changeDescription = change.type === "added" 
-    ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. \
-    Does this code improve the existing functionality or introduce potential issues?"
-    : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality,\
-    introduce bugs, or remove important logic. Is this deletion justified and safe?";
+  const changeDescription = change.type === "added"
+    ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. Does this code improve the existing functionality or introduce potential issues?"
+    : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality, introduce bugs, or remove important logic. Is this deletion justified and safe?";
 
-    return `Your task is to review pull requests. Instructions:
-  - Provide the response in JSON format **without any code blocks or additional formatting**. The result should be able to be parsed as JSON.
-  - Provide the response in the following JSON format: {"lineNumber": <line_number>, "reviewComment": "<review comment>"}
-  - Provide suggestions only if there's something to improve.
+  return `Your task is to review pull requests. Instructions:
+- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+- Do not give positive comments or compliments.
+- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
+- Write the comment in GitHub Markdown format.
+- Use the given description only for the overall context and only comment the code.
+- IMPORTANT: NEVER suggest adding comments to the code.
 
-  **Instructions:**
-  - Analyze the code change in the context provided.
-  - Assume the surrounding code is consistent with standard practices.
-  - **Do not mention irrelevant details or hypothetical code outside of the given snippet.**
+Review the following code diff in the file "${
+  filePath
+  }" and take the pull request title and description into account when writing the response.
+  
+Pull request title: ${prDetails.title}
+Pull request description:
 
-  Pull request title: ${prDetails.title}
-  Pull request description:
+---
+${prDetails.description}
+---
 
-  ${prDetails.description}
-
-  Code diff to review in ${filePath}:
-  ${changeDescription}
-
-  \`\`\`diff
-  ${change.line} ${change.content}
-  \`\`\`
-  `;
+Git diff to review:
+\`\`\`diff
+${change.line} ${change.content}
+\`\`\`
+`;
 }
 
 export function createPromptFileByFile(
