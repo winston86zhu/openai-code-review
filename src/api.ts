@@ -212,7 +212,7 @@ export async function getAIResponse(
 
     // Conditionally build the messages array based on whether it's an "o1" model
     const messages: OpenAI.ChatCompletionMessageParam[] = [
-      ...(isO1Model
+      ...(!isO1Model
         ? [
             {
               role: "system",

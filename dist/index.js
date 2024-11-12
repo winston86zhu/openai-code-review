@@ -32817,7 +32817,7 @@ function getAIResponse(prompt) {
             const isO1Model = OPENAI_API_MODEL.includes("o1");
             // Conditionally build the messages array based on whether it's an "o1" model
             const messages = [
-                ...(isO1Model
+                ...(!isO1Model
                     ? [
                         {
                             role: "system",
