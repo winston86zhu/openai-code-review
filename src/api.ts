@@ -234,6 +234,8 @@ export async function getAIResponse(
       messages,
     });
 
+    console.log(completion.choices[0].message);
+
     const responseContent =
       completion.choices[0].message?.content?.trim() || "{}";
     const parsedResponse = JSON.parse(responseContent);

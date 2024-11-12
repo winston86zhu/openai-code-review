@@ -32832,6 +32832,7 @@ function getAIResponse(prompt) {
                 { role: "user", content: prompt },
             ];
             const completion = yield openai.chat.completions.create(Object.assign(Object.assign({}, queryConfig), { messages }));
+            console.log(completion.choices[0].message);
             const responseContent = ((_b = (_a = completion.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
             const parsedResponse = JSON.parse(responseContent);
             // Ensure the response is in the expected format

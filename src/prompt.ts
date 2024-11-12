@@ -3,58 +3,31 @@ import { PRDetails } from "./model/pr_detail";
 
 export function createPromptLineByLine(
   filePath: string,
-  change: { line: number; content: string; type: string },
-  prDetails: PRDetails,
+  change: { line: number; content: string; type: string }, 
+  prDetails: PRDetails
 ): string {
-  const changeDescription =
-    change.type === "added"
-      ? "An added line of code is presented below."
-      : "A deleted line of code is presented below.";
+    const changeDescription = change.type === "added" 
+    ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. \
+    Does this code improve the existing functionality or introduce potential issues?"
+    : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality,\
+    introduce bugs, or remove important logic. Is this deletion justified and safe?";
 
-  return `As a code reviewer, your task is to analyze the provided code change and offer constructive feedback. Please focus on:
+    return `Your task is to review pull requests. Instructions:
+  - Provide the response in the following JSON format: {"lineNumber": <line_number>, "reviewComment": "<review comment>"}
+  - Provide suggestions only if there's something to improve.
 
-- Correctness
-- Efficiency
-- Adherence to best practices and coding standards
-- Potential security issues
-- Readability and maintainability
+  Pull request title: ${prDetails.title}
+  Pull request description:
 
-**Instructions:**
+  ${prDetails.description}
 
-- Analyze the code change in the context provided.
-- Assume the surrounding code is consistent with standard practices.
-- **Do not mention irrelevant details or hypothetical code outside of the given snippet.**
+  Code diff to review in ${filePath}:
+  ${changeDescription}
 
-**Response Format:**
-
-Provide your feedback in the following JSON format:
-
-\`\`\`json
-[
-  {
-    "lineNumber": ${change.line},
-    "reviewComment": "<Your comment here>"
-  }
-]
-\`\`\`
-
-**Pull Request Details:**
-
-- **Title:** ${prDetails.title}
-- **Description:**
-
-${prDetails.description}
-
-**File:** ${filePath}
-
-**Code Change:**
-
-${changeDescription}
-
-\`\`\`${getLanguageFromFilePath(filePath)}
-${change.content}
-\`\`\`
-`;
+  \`\`\`diff
+  ${change.line} ${change.content}
+  \`\`\`
+  `;
 }
 
 export function createPromptFileByFile(
