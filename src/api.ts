@@ -197,18 +197,23 @@ export async function getAIResponse(
   prompt: string,
 ): Promise<{ lineNumber: string; reviewComment: string }[] | any> {
   const disclaimer = "📌 **Note**: This is an AI-generated comment.";
+  // Determine if the model is an "o1" model (e.g., o1-mini)
+  const isO1Model = OPENAI_API_MODEL.includes("o1");
+  // Beta Limitation: https://platform.openai.com/docs/guides/reasoning?reasoning-prompt-examples=coding-planning#beta-limitations 
+  const temperature = isO1Model ? 1 : 0.15;
+  const top_p = isO1Model ? 1 : 0.95;
+  const frequency_penalty = isO1Model ? 0 : 0.2;
+
   const queryConfig = {
     model: OPENAI_API_MODEL,
-    temperature: 0.15,
+    temperature: temperature,
     max_completion_tokens: 1000,
-    top_p: 0.95,
-    frequency_penalty: 0.2,
+    top_p: top_p,
+    frequency_penalty: frequency_penalty,
     presence_penalty: 0,
   };
 
   try {
-    // Determine if the model is an "o1" model (e.g., o1-mini)
-    const isO1Model = OPENAI_API_MODEL.includes("o1");
 
     // Conditionally build the messages array based on whether it's an "o1" model
     const messages: OpenAI.ChatCompletionMessageParam[] = [
