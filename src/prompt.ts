@@ -6,9 +6,9 @@ export function createPromptLineByLine(
   change: { line: number; content: string; type: string },
   prDetails: PRDetails
 ): string {
-  const changeDescription = change.type === "added"
-    ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. Does this code improve the existing functionality or introduce potential issues?"
-    : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality, introduce bugs, or remove important logic. Is this deletion justified and safe?";
+  // const changeDescription = change.type === "added"
+  //   ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. Does this code improve the existing functionality or introduce potential issues?"
+  //   : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality, introduce bugs, or remove important logic. Is this deletion justified and safe?";
 
   return `Your task is to review pull requests. Instructions:
 - Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}

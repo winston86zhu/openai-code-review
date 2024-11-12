@@ -1,7 +1,7 @@
 // tests/createPrompt.test.ts
 
-import { createPrompt } from "../src/api";
 import { PRDetails } from "../src/model/pr_detail";
+import { createPromptLineByLine } from "../src/prompt";
 
 describe("createPrompt", () => {
   it("should create the correct prompt for added lines", () => {
@@ -21,9 +21,8 @@ describe("createPrompt", () => {
         "This pull request updates example.tsx with new log statements.",
     };
 
-    const prompt = createPrompt(filePath, change, prDetails);
+    const prompt = createPromptLineByLine(filePath, change, prDetails);
 
-    expect(prompt).toContain("This is a new line of code that was added.");
     expect(prompt).toContain("Pull request title: Update example.tsx");
     expect(prompt).toContain("console.log('New line added');");
   });
@@ -44,9 +43,8 @@ describe("createPrompt", () => {
       description: "This pull request removes unnecessary logging.",
     };
 
-    const prompt = createPrompt(filePath, change, prDetails);
+    const prompt = createPromptLineByLine(filePath, change, prDetails);
 
-    expect(prompt).toContain("This is a line of code that was deleted.");
     expect(prompt).toContain("Pull request title: Remove logging");
     expect(prompt).toContain("console.log('Old line removed');");
   });

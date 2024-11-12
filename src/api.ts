@@ -5,6 +5,7 @@ import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import minimatch from "minimatch";
 import { PRDetails } from "./model/pr_detail";
+import { createPromptLineByLine } from "./prompt";
 
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
@@ -146,7 +147,7 @@ export async function analyzeCode(
     if (file.file === "/dev/null") continue;
     for (const change of file.changes) {
       if (change.type === "deleted") continue;
-      const prompt = createPrompt(file.file, change, prDetails);
+      const prompt = createPromptLineByLine(file.file, change, prDetails);
       const aiResponse = await getAIResponseFn(prompt);
       if (aiResponse) {
         for (const response of aiResponse) {
@@ -161,36 +162,6 @@ export async function analyzeCode(
     }
   }
   return comments;
-}
-
-export function createPrompt(
-  filePath: string,
-  change: { line: number; content: string; type: string },
-  prDetails: PRDetails,
-): string {
-  const changeDescription =
-    change.type === "added"
-      ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. \
-  Does this code improve the existing functionality or introduce potential issues?"
-      : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality,\
-   introduce bugs, or remove important logic. Is this deletion justified and safe?";
-
-  return `Your task is to review pull requests. Instructions:
-- Provide the response in the following JSON format: {"lineNumber": <line_number>, "reviewComment": "<review comment>"}
-- Provide suggestions only if there's something to improve.
-
-Pull request title: ${prDetails.title}
-Pull request description:
-
-${prDetails.description}
-
-Code diff to review in ${filePath}:
-${changeDescription}
-
-\`\`\`diff
-${change.line} ${change.content}
-\`\`\`
-`;
 }
 
 export async function getAIResponse(
@@ -235,6 +206,8 @@ export async function getAIResponse(
     });
 
     console.log(completion.choices[0].message);
+    console.log('-----------------------------------------------');
+    console.log(completion.choices[0].message?.content?.trim());
 
     const responseContent =
       completion.choices[0].message?.content?.trim() || "{}";
