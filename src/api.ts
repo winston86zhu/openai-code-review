@@ -200,14 +200,29 @@ export async function getAIResponse(
   const queryConfig = {
     model: OPENAI_API_MODEL,
     temperature: 0.15,
-    max_tokens: 1000,
+    max_completion_tokens: 1000,
     top_p: 0.95,
     frequency_penalty: 0.2,
     presence_penalty: 0,
   };
 
   try {
-    const messages: OpenAI.ChatCompletionMessageParam[] = [{ role: "user", content: prompt }];
+    // Determine if the model is an "o1" model (e.g., o1-mini)
+    const isO1Model = OPENAI_API_MODEL.includes("o1");
+
+    // Conditionally build the messages array based on whether it's an "o1" model
+    const messages: OpenAI.ChatCompletionMessageParam[] = [
+      ...(isO1Model
+        ? [
+            {
+              role: "system",
+              content:
+                "You are a helpful assistant for reviewing GitHub Pull Request code changes.",
+            } as OpenAI.ChatCompletionMessageParam,
+          ]
+        : []),
+      { role: "user", content: prompt } as OpenAI.ChatCompletionMessageParam,
+    ];
 
     const completion = await openai.chat.completions.create({
       ...queryConfig,

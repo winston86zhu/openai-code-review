@@ -32807,13 +32807,26 @@ function getAIResponse(prompt) {
         const queryConfig = {
             model: OPENAI_API_MODEL,
             temperature: 0.15,
-            max_tokens: 1000,
+            max_completion_tokens: 1000,
             top_p: 0.95,
             frequency_penalty: 0.2,
             presence_penalty: 0,
         };
         try {
-            const messages = [{ role: "user", content: prompt }];
+            // Determine if the model is an "o1" model (e.g., o1-mini)
+            const isO1Model = OPENAI_API_MODEL.includes("o1");
+            // Conditionally build the messages array based on whether it's an "o1" model
+            const messages = [
+                ...(isO1Model
+                    ? [
+                        {
+                            role: "system",
+                            content: "You are a helpful assistant for reviewing GitHub Pull Request code changes.",
+                        },
+                    ]
+                    : []),
+                { role: "user", content: prompt },
+            ];
             const completion = yield openai.chat.completions.create(Object.assign(Object.assign({}, queryConfig), { messages }));
             const responseContent = ((_b = (_a = completion.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
             const parsedResponse = JSON.parse(responseContent);
