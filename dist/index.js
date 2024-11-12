@@ -32813,13 +32813,8 @@ function getAIResponse(prompt) {
             presence_penalty: 0,
         };
         try {
-            const completion = yield openai.chat.completions.create(Object.assign(Object.assign({}, queryConfig), { messages: [
-                    {
-                        role: "system",
-                        content: "You are a helpful assistant for reviewing github Pull Request code changes.",
-                    },
-                    { role: "user", content: prompt },
-                ] }));
+            const messages = [{ role: "user", content: prompt }];
+            const completion = yield openai.chat.completions.create(Object.assign(Object.assign({}, queryConfig), { messages }));
             const responseContent = ((_b = (_a = completion.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
             const parsedResponse = JSON.parse(responseContent);
             // Ensure the response is in the expected format
