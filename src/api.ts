@@ -207,16 +207,11 @@ export async function getAIResponse(
   };
 
   try {
+    const messages: OpenAI.ChatCompletionMessageParam[] = [{ role: "user", content: prompt }];
+
     const completion = await openai.chat.completions.create({
       ...queryConfig,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a helpful assistant for reviewing github Pull Request code changes.",
-        },
-        { role: "user", content: prompt },
-      ],
+      messages,
     });
 
     const responseContent =
