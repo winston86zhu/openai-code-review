@@ -32809,11 +32809,19 @@ function getAIResponse(prompt) {
                 { role: "user", content: prompt },
             ];
             const completion = yield openai.chat.completions.create(Object.assign(Object.assign({}, queryConfig), { messages }));
-            console.log(completion.choices[0].message);
             console.log('-----------------------------------------------');
             console.log((_b = (_a = completion.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim());
             const responseContent = ((_d = (_c = completion.choices[0].message) === null || _c === void 0 ? void 0 : _c.content) === null || _d === void 0 ? void 0 : _d.trim()) || "{}";
-            const parsedResponse = JSON.parse(responseContent);
+            const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```/);
+            let jsonString;
+            if (jsonMatch && jsonMatch[1]) {
+                jsonString = jsonMatch[1].trim();
+            }
+            else {
+                // If no code fences are found, assume the entire content is JSON
+                jsonString = responseContent;
+            }
+            const parsedResponse = JSON.parse(jsonString);
             // Ensure the response is in the expected format
             if (Array.isArray(parsedResponse.reviews)) {
                 // Prepend the disclaimer to each review comment
@@ -33006,7 +33014,7 @@ function createPromptLineByLine(filePath, change, prDetails) {
     //   ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. Does this code improve the existing functionality or introduce potential issues?"
     //   : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality, introduce bugs, or remove important logic. Is this deletion justified and safe?";
     return `Your task is to review pull requests. Instructions:
-- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+- Provide the response in JSON format without any markdown or code fences: {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
 - Do not give positive comments or compliments.
 - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
 - Write the comment in GitHub Markdown format.

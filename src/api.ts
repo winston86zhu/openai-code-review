@@ -205,13 +205,20 @@ export async function getAIResponse(
       messages,
     });
 
-    console.log(completion.choices[0].message);
     console.log('-----------------------------------------------');
     console.log(completion.choices[0].message?.content?.trim());
 
-    const responseContent =
-      completion.choices[0].message?.content?.trim() || "{}";
-    const parsedResponse = JSON.parse(responseContent);
+    const responseContent = completion.choices[0].message?.content?.trim() || "{}";
+    const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```/);
+
+    let jsonString;
+    if (jsonMatch && jsonMatch[1]) {
+      jsonString = jsonMatch[1].trim();
+    } else {
+      // If no code fences are found, assume the entire content is JSON
+      jsonString = responseContent;
+    }
+    const parsedResponse = JSON.parse(jsonString);
 
     // Ensure the response is in the expected format
     if (Array.isArray(parsedResponse.reviews)) {

@@ -19,7 +19,7 @@
     "url": "https://github.com/winston86zhu/openai-code-review.git"
   },
   "author": "Winston Z",
-  "license": "MIT",
+  "license": "WTFPL",
   "description": "",
   "devDependencies": {
     "@actions/core": "^1.11.1",
