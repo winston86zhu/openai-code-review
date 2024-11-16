@@ -25,7 +25,7 @@ describe("analyzeCode with dependency injection", () => {
       .fn()
       .mockResolvedValueOnce([
         {
-          lineNumber: "3",
+          lineNumber: 3,
           reviewComment:
             "Consider refactoring this line for better readability.",
         },

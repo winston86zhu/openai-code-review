@@ -11,7 +11,7 @@ export function createPromptLineByLine(
   //   : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality, introduce bugs, or remove important logic. Is this deletion justified and safe?";
 
   return `Your task is to review pull requests. Instructions:
-- Provide the response in JSON format without any markdown or code fences: {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
 - Do not give positive comments or compliments.
 - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
 - Write the comment in GitHub Markdown format.
@@ -40,52 +40,34 @@ export function createPromptFileByFile(
   filePath: string,
   changes: { line: number; content: string; type: string }[],
   prDetails: PRDetails,
-  fullFileContent: string,
 ): string {
-  const changeDescription =
-    "Below are the code changes made to the file. Please review them comprehensively.";
+  const diffContent = changes
+    .map((change) => {
+      const sign = change.type === "added" ? "+" : "-";
+      return `${sign} ${change.content}`;
+    })
+    .join("\n");
 
-  return `You are an expert code reviewer. Your task is to analyze the code changes made in the file \`${filePath}\` and provide constructive feedback focusing on:
+  return `Your task is to review pull requests. Instructions:
+- Provide the response in JSON format without any markdown or code fences: {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+- Do not give positive comments or compliments.
+- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
+- Write the comment in GitHub Markdown format.
+- Use the given description only for the overall context and only comment on the code.
+- IMPORTANT: NEVER suggest adding comments to the code.
 
-- Correctness
-- Efficiency
-- Security vulnerabilities
-- Compliance with coding standards and best practices
-- Readability and maintainability
+Review the following code diff in the file "${filePath}" and take the pull request title and description into account when writing the response.
 
-**Instructions:**
+Pull request title: ${prDetails.title}
+Pull request description:
 
-- Review the changes in the context of the entire file.
-- Reference specific lines in your feedback.
-- **Avoid mentioning irrelevant or unchanged code.**
-
-**Response Format:**
-
-Provide your feedback in the following JSON format:
-
-\`\`\`json
-[
-  {
-    "lineNumber": <line_number>,
-    "reviewComment": "<Your comment here>"
-  }
-  // Add more comments as needed
-]
-\`\`\`
-
-**Pull Request Details:**
-
-- **Title:** ${prDetails.title}
-- **Description:**
-
+---
 ${prDetails.description}
+---
 
-**File:** ${filePath}
-
-**Code After Changes:**
-
-\`\`\`${getLanguageFromFilePath(filePath)}
-${fullFileContent}
+Git diff to review:
+\`\`\`diff
+${diffContent}
 \`\`\`
 `;
 }

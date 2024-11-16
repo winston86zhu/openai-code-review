@@ -5,7 +5,7 @@ import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import minimatch from "minimatch";
 import { PRDetails } from "./model/pr_detail";
-import { createPromptLineByLine } from "./prompt";
+import { createPromptFileByFile, createPromptLineByLine } from "./prompt";
 
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
@@ -134,30 +134,30 @@ export function parseDiff(diffText: string): ParsedDiff[] {
   });
 }
 
-// TODO: Instead of sending each line individually, it can be bundled by Logical Grouping:
-//  - file/function/class level
-// TODO: Some major line - we can still send them individually to ensure focused attention.
 export async function analyzeCode(
   parsedDiff: ParsedDiff[],
   prDetails: PRDetails,
-  getAIResponseFn = getAIResponse, // Default to original function
+  getAIResponseFn = getAIResponse,
 ) {
   const comments: Array<{ body: string; path: string; line: number }> = [];
+
   for (const file of parsedDiff) {
     if (file.file === "/dev/null") continue;
-    for (const change of file.changes) {
-      if (change.type === "deleted") continue;
-      const prompt = createPromptLineByLine(file.file, change, prDetails);
-      const aiResponse = await getAIResponseFn(prompt);
-      if (aiResponse) {
-        for (const response of aiResponse) {
-          const newComment = {
-            body: response.reviewComment,
-            path: file.file,
-            line: change.line,
-          };
-          comments.push(newComment);
-        }
+
+    const changes = file.changes.filter(change => change.type !== "deleted");
+    if (changes.length === 0) continue;
+
+    const prompt = createPromptFileByFile(file.file, changes, prDetails);
+    const aiResponse = await getAIResponseFn(prompt);
+
+    if (aiResponse && Array.isArray(aiResponse)) {
+      for (const response of aiResponse) {
+        const newComment = {
+          body: response.reviewComment,
+          path: file.file,
+          line: response.lineNumber,
+        };
+        comments.push(newComment);
       }
     }
   }
@@ -166,11 +166,9 @@ export async function analyzeCode(
 
 export async function getAIResponse(
   prompt: string,
-): Promise<{ lineNumber: string; reviewComment: string }[] | any> {
+): Promise<{ lineNumber: number; reviewComment: string }[] | any> {
   const disclaimer = "📌 **Note**: This is an AI-generated comment.";
-  // Determine if the model is an "o1" model (e.g., o1-mini)
   const isO1Model = OPENAI_API_MODEL.includes("o1");
-  // Beta Limitation: https://platform.openai.com/docs/guides/reasoning?reasoning-prompt-examples=coding-planning#beta-limitations 
   const temperature = isO1Model ? 1 : 0.15;
   const top_p = isO1Model ? 1 : 0.95;
   const frequency_penalty = isO1Model ? 0 : 0.2;
@@ -185,19 +183,17 @@ export async function getAIResponse(
   };
 
   try {
-
-    // Conditionally build the messages array based on whether it's an "o1" model
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       ...(!isO1Model
         ? [
             {
-              role: "system",
+              role: "system" as const,
               content:
                 "You are a helpful assistant for reviewing GitHub Pull Request code changes.",
-            } as OpenAI.ChatCompletionMessageParam,
+            },
           ]
         : []),
-      { role: "user", content: prompt } as OpenAI.ChatCompletionMessageParam,
+      { role: "user" as const, content: prompt },
     ];
 
     const completion = await openai.chat.completions.create({
@@ -209,27 +205,27 @@ export async function getAIResponse(
     console.log(completion.choices[0].message?.content?.trim());
 
     const responseContent = completion.choices[0].message?.content?.trim() || "{}";
-    const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```/);
 
-    let jsonString;
-    if (jsonMatch && jsonMatch[1]) {
-      jsonString = jsonMatch[1].trim();
-    } else {
-      // If no code fences are found, assume the entire content is JSON
-      jsonString = responseContent;
+    // Parse the JSON directly since we've instructed the AI not to include code fences
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(responseContent);
+    } catch (error) {
+      console.error("Failed to parse JSON:", error);
+      console.error("Response content:", responseContent);
+      return null;
     }
-    const parsedResponse = JSON.parse(jsonString);
 
     // Ensure the response is in the expected format
     if (Array.isArray(parsedResponse.reviews)) {
       // Prepend the disclaimer to each review comment
-      return parsedResponse.reviews.map((review: { reviewComment: any }) => ({
+      return parsedResponse.reviews.map((review: { reviewComment: string; lineNumber: number }) => ({
         ...review,
         reviewComment: `${disclaimer}\n\n${review.reviewComment}`,
       }));
     } else {
       console.warn("Unexpected response format:", responseContent);
-      return responseContent;
+      return null;
     }
   } catch (error) {
     console.error("OpenAI API error:", error);
