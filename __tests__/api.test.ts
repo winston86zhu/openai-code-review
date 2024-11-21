@@ -26,6 +26,7 @@ describe("analyzeCode with dependency injection", () => {
       .mockResolvedValueOnce([
         {
           lineNumber: 3,
+          filePath: "example.tsx",
           reviewComment:
             "Consider refactoring this line for better readability.",
         },

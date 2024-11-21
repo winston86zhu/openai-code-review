@@ -5,7 +5,7 @@ import { Octokit } from "@octokit/core";
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods";
 import minimatch from "minimatch";
 import { PRDetails } from "./model/pr_detail";
-import { createPromptFileByFile, createPromptLineByLine } from "./prompt";
+import { createPromptFileByFile, createPromptForAllFiles, createPromptLineByLine } from "./prompt";
 
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
@@ -27,60 +27,28 @@ export interface ParsedDiff {
 }
 
 export async function getPRDetails(): Promise<PRDetails> {
-  const { repository, number } = JSON.parse(
+  const eventData = JSON.parse(
     readFileSync(process.env.GITHUB_EVENT_PATH || "", "utf8"),
   );
+
+  const { repository } = eventData;
+  const pullRequest = eventData.pull_request;
+  const pull_number = pullRequest.number;
+
   const prResponse = await octokit.rest.pulls.get({
     owner: repository.owner.login,
     repo: repository.name,
-    pull_number: number,
+    pull_number,
   });
 
   return {
     owner: repository.owner.login,
     repo: repository.name,
-    pull_number: number,
+    pull_number,
     title: prResponse.data.title || "",
     description: prResponse.data.body || "",
   };
 }
-
-export async function getFullFileContent(
-  filePath: string,
-  prDetails: PRDetails,
-): Promise<string> {
-  try {
-    // Fetch the file content from the PR head branch
-    const response = await octokit.rest.repos.getContent({
-      owner: prDetails.owner,
-      repo: prDetails.repo,
-      path: filePath,
-      ref: `refs/pull/${prDetails.pull_number}/head`,
-    });
-
-    if (Array.isArray(response.data)) {
-      throw new Error(
-        `Expected a file but found a directory at path: ${filePath}`,
-      );
-    }
-
-    // Check if response.data is of type 'file'
-    if (response.data.type !== "file") {
-      throw new Error(
-        `Expected a file but found type '${response.data.type}' at path: ${filePath}`,
-      );
-    }
-
-    const content = Buffer.from(response.data.content, "base64").toString(
-      "utf8",
-    );
-    return content;
-  } catch (error) {
-    console.error(`Error fetching file content for ${filePath}:`, error);
-    throw error;
-  }
-}
-
 /**
  * https://github.com/octocat/Hello-World/commit/7fd1a60b01f91b314f59955a4e4d4e80d8edf11d.diff 
  * diff --git a/README b/README
@@ -140,25 +108,47 @@ export async function analyzeCode(
   getAIResponseFn = getAIResponse,
 ) {
   const comments: Array<{ body: string; path: string; line: number }> = [];
+  const MAX_CHANGES = 100; // Set the maximum allowed changes per file
+  const MAX_TOTAL_CHANGES = 500; // Set the maximum total changes
 
-  for (const file of parsedDiff) {
-    if (file.file === "/dev/null") continue;
+  // Filter and prepare diffs
+  const filteredDiffs = parsedDiff.filter((file) => {
+    if (file.file === "/dev/null") return false;
+    const changes = file.changes.filter((change) => change.type !== "deleted");
+    if (changes.length === 0) return false;
+    if (changes.length > MAX_CHANGES) return false;
+    file.changes = changes;
+    return true;
+  });
 
-    const changes = file.changes.filter(change => change.type !== "deleted");
-    if (changes.length === 0) continue;
+  // Limit total changes to avoid exceeding context length
+  let totalChanges = filteredDiffs.reduce(
+    (acc, file) => acc + file.changes.length,
+    0,
+  );
+  if (totalChanges > MAX_TOTAL_CHANGES) {
+    console.warn("Total changes exceed the maximum allowed. Adjusting...");
+    // Implement logic to reduce changes (e.g., prioritize files)
+    // For simplicity, limit the number of files
+    filteredDiffs.splice(MAX_TOTAL_CHANGES);
+  }
 
-    const prompt = createPromptFileByFile(file.file, changes, prDetails);
-    const aiResponse = await getAIResponseFn(prompt);
+  if (filteredDiffs.length === 0) {
+    console.log("No files to analyze after filtering.");
+    return comments;
+  }
 
-    if (aiResponse && Array.isArray(aiResponse)) {
-      for (const response of aiResponse) {
-        const newComment = {
-          body: response.reviewComment,
-          path: file.file,
-          line: response.lineNumber,
-        };
-        comments.push(newComment);
-      }
+  const prompt = createPromptForAllFiles(filteredDiffs, prDetails);
+  const aiResponse = await getAIResponseFn(prompt);
+
+  if (aiResponse && Array.isArray(aiResponse)) {
+    for (const response of aiResponse) {
+      const newComment = {
+        body: response.reviewComment,
+        path: response.filePath,
+        line: response.lineNumber,
+      };
+      comments.push(newComment);
     }
   }
   return comments;
@@ -166,7 +156,9 @@ export async function analyzeCode(
 
 export async function getAIResponse(
   prompt: string,
-): Promise<{ lineNumber: number; reviewComment: string }[] | any> {
+): Promise<
+  { filePath: string; lineNumber: number; reviewComment: string }[] | any
+> {
   const disclaimer = "📌 **Note**: This is an AI-generated comment.";
   const isO1Model = OPENAI_API_MODEL.includes("o1");
   const temperature = isO1Model ? 1 : 0.15;
@@ -201,10 +193,11 @@ export async function getAIResponse(
       messages,
     });
 
-    console.log('-----------------------------------------------');
+    console.log("--------------------The response for the prompt:");
     console.log(completion.choices[0].message?.content?.trim());
 
-    const responseContent = completion.choices[0].message?.content?.trim() || "{}";
+    const responseContent =
+      completion.choices[0].message?.content?.trim() || "{}";
 
     // Parse the JSON directly since we've instructed the AI not to include code fences
     let parsedResponse;
@@ -219,10 +212,16 @@ export async function getAIResponse(
     // Ensure the response is in the expected format
     if (Array.isArray(parsedResponse.reviews)) {
       // Prepend the disclaimer to each review comment
-      return parsedResponse.reviews.map((review: { reviewComment: string; lineNumber: number }) => ({
-        ...review,
-        reviewComment: `${disclaimer}\n\n${review.reviewComment}`,
-      }));
+      return parsedResponse.reviews.map(
+        (review: {
+          filePath: string;
+          reviewComment: string;
+          lineNumber: number;
+        }) => ({
+          ...review,
+          reviewComment: `${disclaimer}\n\n${review.reviewComment}`,
+        }),
+      );
     } else {
       console.warn("Unexpected response format:", responseContent);
       return null;
@@ -279,6 +278,8 @@ async function main() {
         prDetails.pull_number,
         comments,
       );
+    } else {
+      console.log("No comments generated by AI.");
     }
   } catch (error) {
     console.error("Error in processing:", error);
