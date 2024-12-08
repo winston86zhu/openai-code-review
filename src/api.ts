@@ -175,6 +175,7 @@ export async function getAIResponse(
   };
 
   try {
+    // Only O1 models can take the system message
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       ...(!isO1Model
         ? [
@@ -193,8 +194,10 @@ export async function getAIResponse(
       messages,
     });
 
+    console.log("--------- The input prompt for the calll is")
+    console.log(prompt)
     console.log("--------------------The response for the prompt:");
-    console.log(completion.choices[0].message?.content?.trim());
+    console.log(completion.choices[0].message);
 
     const responseContent =
       completion.choices[0].message?.content?.trim() || "{}";
