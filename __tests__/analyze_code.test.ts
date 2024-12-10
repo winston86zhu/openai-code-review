@@ -42,11 +42,13 @@ test('analyzeCode returns comments when AI provides responses', async () => {
       body: 'Consider using a type annotation for x.',
       path: 'src/example.ts',
       line: 1,
+      side: 'RIGHT'
     },
     {
       body: 'Avoid using console.log in production code.',
       path: 'src/example.ts',
       line: 2,
+      side: 'RIGHT'
     },
   ]);
 });

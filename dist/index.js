@@ -32733,7 +32733,8 @@ function analyzeCode(parsedDiff_1, prDetails_1) {
         const filteredDiffs = parsedDiff.filter((file) => {
             if (file.file === "/dev/null")
                 return false;
-            const changes = file.changes.filter((change) => change.type !== "deleted");
+            // deleted files are not analyzed
+            const changes = file.changes;
             if (changes.length === 0)
                 return false;
             if (changes.length > MAX_CHANGES)
@@ -32761,6 +32762,7 @@ function analyzeCode(parsedDiff_1, prDetails_1) {
                     body: response.reviewComment,
                     path: response.filePath,
                     line: response.lineNumber,
+                    side: response.changeType === 'deleted' ? 'LEFT' : 'RIGHT',
                 };
                 comments.push(newComment);
             }
@@ -32798,10 +32800,6 @@ function getAIResponse(prompt) {
                 { role: "user", content: prompt },
             ];
             const completion = yield openai.chat.completions.create(Object.assign(Object.assign({}, queryConfig), { messages }));
-            console.log("--------- The input prompt for the calll is");
-            console.log(prompt);
-            console.log("--------------------The response for the prompt:");
-            console.log(completion.choices[0].message);
             const responseContent = ((_b = (_a = completion.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
             // Parse the JSON directly since we've instructed the AI not to include code fences
             let parsedResponse;
@@ -32831,6 +32829,7 @@ function getAIResponse(prompt) {
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
+        console.log("The following comments will be posted:", comments);
         yield octokit.rest.pulls.createReview({
             owner,
             repo,

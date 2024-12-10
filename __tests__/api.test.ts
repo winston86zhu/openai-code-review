@@ -37,6 +37,7 @@ describe("analyzeCode with dependency injection", () => {
         body: "Consider refactoring this line for better readability.",
         path: "example.tsx",
         line: 3,
+        side: "RIGHT"
       },
     ];
 

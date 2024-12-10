@@ -107,14 +107,16 @@ export async function analyzeCode(
   prDetails: PRDetails,
   getAIResponseFn = getAIResponse,
 ) {
-  const comments: Array<{ body: string; path: string; line: number }> = [];
+  const comments: Array<{ body: string; path: string; line: number; side: 'LEFT' | 'RIGHT' }> = [];
   const MAX_CHANGES = 100; // Set the maximum allowed changes per file
   const MAX_TOTAL_CHANGES = 500; // Set the maximum total changes
 
   // Filter and prepare diffs
   const filteredDiffs = parsedDiff.filter((file) => {
     if (file.file === "/dev/null") return false;
-    const changes = file.changes.filter((change) => change.type !== "deleted");
+
+    // deleted files are not analyzed
+    const changes = file.changes;
     if (changes.length === 0) return false;
     if (changes.length > MAX_CHANGES) return false;
     file.changes = changes;
@@ -143,10 +145,11 @@ export async function analyzeCode(
 
   if (aiResponse && Array.isArray(aiResponse)) {
     for (const response of aiResponse) {
-      const newComment = {
+      const newComment: { body: string; path: string; line: number; side: 'LEFT' | 'RIGHT' } = {
         body: response.reviewComment,
         path: response.filePath,
         line: response.lineNumber,
+        side: response.changeType === 'deleted' ? 'LEFT' : 'RIGHT',
       };
       comments.push(newComment);
     }
@@ -194,11 +197,6 @@ export async function getAIResponse(
       messages,
     });
 
-    console.log("--------- The input prompt for the calll is")
-    console.log(prompt)
-    console.log("--------------------The response for the prompt:");
-    console.log(completion.choices[0].message);
-
     const responseContent =
       completion.choices[0].message?.content?.trim() || "{}";
 
@@ -239,8 +237,9 @@ async function createReviewComment(
   owner: string,
   repo: string,
   pull_number: number,
-  comments: Array<{ body: string; path: string; line: number }>,
+  comments: Array<{ body: string; path: string; line: number; side: 'LEFT' | 'RIGHT' }>,
 ) {
+  console.log("The following comments will be posted:", comments);
   await octokit.rest.pulls.createReview({
     owner,
     repo,
