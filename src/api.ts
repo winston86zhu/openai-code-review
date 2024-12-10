@@ -83,7 +83,7 @@ export function parseDiff(diffText: string): ParsedDiff[] {
 
   return files.map((fileDiff) => {
     const [fileHeader, ...contentLines] = fileDiff.split("\n");
-    const filePath = fileHeader.match(/b\/(\S+)/)?.[1] ?? "";
+    const filePath = fileHeader.match(/b\/(.+)$/)?.[1] ?? "";
 
     // TODO: I dont know if it is plausible to review both added and deleted lines, see `analyzeCode` function
     const changes = contentLines

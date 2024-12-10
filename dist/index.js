@@ -32711,7 +32711,7 @@ function parseDiff(diffText) {
     return files.map((fileDiff) => {
         var _a, _b;
         const [fileHeader, ...contentLines] = fileDiff.split("\n");
-        const filePath = (_b = (_a = fileHeader.match(/b\/(\S+)/)) === null || _a === void 0 ? void 0 : _a[1]) !== null && _b !== void 0 ? _b : "";
+        const filePath = (_b = (_a = fileHeader.match(/b\/(.+)$/)) === null || _a === void 0 ? void 0 : _a[1]) !== null && _b !== void 0 ? _b : "";
         // TODO: I dont know if it is plausible to review both added and deleted lines, see `analyzeCode` function
         const changes = contentLines
             .filter((line) => (line.startsWith("+") && !line.startsWith("+++")) ||
