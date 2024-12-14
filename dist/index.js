@@ -32705,44 +32705,22 @@ function getDiff(owner, repo, pull_number) {
     });
 }
 function parseDiff(diffText) {
+    // Removes the first element of the resulting array,
+    // which is an empty string because the split operation creates an empty string
     const files = diffText.split(/^diff --git/gm).slice(1);
     return files.map((fileDiff) => {
-        const lines = fileDiff.split("\n");
-        const fileHeader = lines.shift(); // Remove the first line as it's the file header
-        const filePathMatch = fileHeader === null || fileHeader === void 0 ? void 0 : fileHeader.match(/b\/(.+)$/);
-        const filePath = filePathMatch ? filePathMatch[1] : "";
-        const changes = [];
-        let originalLine = 0;
-        let modifiedLine = 0;
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const hunkHeader = line.match(/^@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@/);
-            if (hunkHeader) {
-                originalLine = parseInt(hunkHeader[1], 10);
-                modifiedLine = parseInt(hunkHeader[3], 10);
-                continue;
-            }
-            if (line.startsWith('+') && !line.startsWith('+++')) {
-                changes.push({
-                    line: modifiedLine,
-                    content: line.slice(1),
-                    type: 'added',
-                });
-                modifiedLine++;
-            }
-            else if (line.startsWith('-') && !line.startsWith('---')) {
-                changes.push({
-                    line: originalLine,
-                    content: line.slice(1),
-                    type: 'deleted',
-                });
-                originalLine++;
-            }
-            else {
-                originalLine++;
-                modifiedLine++;
-            }
-        }
+        var _a, _b;
+        const [fileHeader, ...contentLines] = fileDiff.split("\n");
+        const filePath = (_b = (_a = fileHeader.match(/b\/(.+)$/)) === null || _a === void 0 ? void 0 : _a[1]) !== null && _b !== void 0 ? _b : "";
+        // TODO: I dont know if it is plausible to review both added and deleted lines, see `analyzeCode` function
+        const changes = contentLines
+            .filter((line) => (line.startsWith("+") && !line.startsWith("+++")) ||
+            (line.startsWith("-") && !line.startsWith("---")))
+            .map((line, index) => ({
+            line: index + 1,
+            content: line.slice(1),
+            type: line.startsWith("+") ? "added" : "deleted",
+        }));
         return { file: filePath, changes };
     });
 }
