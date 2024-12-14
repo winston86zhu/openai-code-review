@@ -1,0 +1,27 @@
+name: Code Bot
+
+on:
+    pull_request:
+        types: [opened, reopened, ready_for_review]
+    issue_comment:
+
+jobs:
+    pr_agent_job:
+        if: ${{ github.event.sender.type != 'Bot' }}
+        runs-on: ubuntu-latest
+        permissions:
+            issues: write
+            pull-requests: write
+            contents: write
+        name: Run pr agent on every pull request, respond to user comments
+        steps:
+            - name: PR Agent action step
+              id: pragent
+              uses: Codium-ai/pr-agent@main 
+              env:
+                    CONFIG.MODEL: "gpt-4o"
+                    GITHUB_ACTION_CONFIG.AUTO_DESCRIBE: true
+                    GITHUB_ACTION_CONFIG.AUTO_REVIEW: true
+                    GITHUB_ACTION_CONFIG.AUTO_IMPROVE: true
+                    GITHUB_ACTION_CONFIG.PR_ACTIONS: '["opened", "reopened", "ready_for_review", "labeled"]'
+                    PR_REVIEWER.INLINE_CODE_COMMENTS: "true"
