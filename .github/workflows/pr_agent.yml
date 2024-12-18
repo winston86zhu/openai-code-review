@@ -19,12 +19,12 @@ jobs:
               id: pragent
               uses: Codium-ai/pr-agent@main 
               env:
-                    OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-                    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                    CONFIG.MODEL: "gpt-4o"
-                    GITHUB_ACTION_CONFIG.AUTO_DESCRIBE: true
-                    GITHUB_ACTION_CONFIG.AUTO_REVIEW: true
-                    GITHUB_ACTION_CONFIG.AUTO_IMPROVE: true
-                    GITHUB_ACTION_CONFIG.PR_ACTIONS: '["opened", "reopened", "ready_for_review", "labeled"]'
-                    PR_REVIEWER.INLINE_CODE_COMMENTS: true
-                    PR_CODE_SUGGESTIONS.COMMITABLE_CODE_SUGGESTIONS: true # This applies to /improve
+                OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                CONFIG.MODEL: "o1-mini"
+                GITHUB_ACTION_CONFIG.AUTO_DESCRIBE: true
+                GITHUB_ACTION_CONFIG.AUTO_REVIEW: true
+                GITHUB_ACTION_CONFIG.AUTO_IMPROVE: true
+                GITHUB_ACTION_CONFIG.PR_ACTIONS: '["opened", "reopened", "ready_for_review", "labeled"]'
+                PR_REVIEWER.INLINE_CODE_COMMENTS: true
+                PR_CODE_SUGGESTIONS.COMMITABLE_CODE_SUGGESTIONS: true # This applies to /improve
