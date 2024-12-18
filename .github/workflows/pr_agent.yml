@@ -27,3 +27,4 @@ jobs:
                     GITHUB_ACTION_CONFIG.AUTO_IMPROVE: true
                     GITHUB_ACTION_CONFIG.PR_ACTIONS: '["opened", "reopened", "ready_for_review", "labeled"]'
                     PR_REVIEWER.INLINE_CODE_COMMENTS: true
+                    PR_CODE_SUGGESTIONS.COMMITABLE_CODE_SUGGESTIONS: true # This applies to /improve
