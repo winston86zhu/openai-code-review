@@ -32643,7 +32643,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getPRDetails = getPRDetails;
-exports.getFullFileContent = getFullFileContent;
 exports.getDiff = getDiff;
 exports.parseDiff = parseDiff;
 exports.analyzeCode = analyzeCode;
@@ -32664,45 +32663,22 @@ const octokit = new MyOctokit({ auth: GITHUB_TOKEN });
 const openai = new openai_1.default({ apiKey: OPENAI_API_KEY });
 function getPRDetails() {
     return __awaiter(this, void 0, void 0, function* () {
-        const { repository, number } = JSON.parse((0, fs_1.readFileSync)(process.env.GITHUB_EVENT_PATH || "", "utf8"));
+        const eventData = JSON.parse((0, fs_1.readFileSync)(process.env.GITHUB_EVENT_PATH || "", "utf8"));
+        const { repository } = eventData;
+        const pullRequest = eventData.pull_request;
+        const pull_number = pullRequest.number;
         const prResponse = yield octokit.rest.pulls.get({
             owner: repository.owner.login,
             repo: repository.name,
-            pull_number: number,
+            pull_number,
         });
         return {
             owner: repository.owner.login,
             repo: repository.name,
-            pull_number: number,
+            pull_number,
             title: prResponse.data.title || "",
             description: prResponse.data.body || "",
         };
-    });
-}
-function getFullFileContent(filePath, prDetails) {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            // Fetch the file content from the PR head branch
-            const response = yield octokit.rest.repos.getContent({
-                owner: prDetails.owner,
-                repo: prDetails.repo,
-                path: filePath,
-                ref: `refs/pull/${prDetails.pull_number}/head`,
-            });
-            if (Array.isArray(response.data)) {
-                throw new Error(`Expected a file but found a directory at path: ${filePath}`);
-            }
-            // Check if response.data is of type 'file'
-            if (response.data.type !== "file") {
-                throw new Error(`Expected a file but found type '${response.data.type}' at path: ${filePath}`);
-            }
-            const content = Buffer.from(response.data.content, "base64").toString("utf8");
-            return content;
-        }
-        catch (error) {
-            console.error(`Error fetching file content for ${filePath}:`, error);
-            throw error;
-        }
     });
 }
 /**
@@ -32735,7 +32711,7 @@ function parseDiff(diffText) {
     return files.map((fileDiff) => {
         var _a, _b;
         const [fileHeader, ...contentLines] = fileDiff.split("\n");
-        const filePath = (_b = (_a = fileHeader.match(/b\/(\S+)/)) === null || _a === void 0 ? void 0 : _a[1]) !== null && _b !== void 0 ? _b : "";
+        const filePath = (_b = (_a = fileHeader.match(/b\/(.+)$/)) === null || _a === void 0 ? void 0 : _a[1]) !== null && _b !== void 0 ? _b : "";
         // TODO: I dont know if it is plausible to review both added and deleted lines, see `analyzeCode` function
         const changes = contentLines
             .filter((line) => (line.startsWith("+") && !line.startsWith("+++")) ||
@@ -32748,30 +32724,47 @@ function parseDiff(diffText) {
         return { file: filePath, changes };
     });
 }
-// TODO: Instead of sending each line individually, it can be bundled by Logical Grouping:
-//  - file/function/class level
-// TODO: Some major line - we can still send them individually to ensure focused attention.
 function analyzeCode(parsedDiff_1, prDetails_1) {
     return __awaiter(this, arguments, void 0, function* (parsedDiff, prDetails, getAIResponseFn = getAIResponse) {
         const comments = [];
-        for (const file of parsedDiff) {
+        const MAX_CHANGES = 100; // Set the maximum allowed changes per file
+        const MAX_TOTAL_CHANGES = 500; // Set the maximum total changes
+        // Filter and prepare diffs
+        const filteredDiffs = parsedDiff.filter((file) => {
             if (file.file === "/dev/null")
-                continue;
-            for (const change of file.changes) {
-                if (change.type === "deleted")
-                    continue;
-                const prompt = (0, prompt_1.createPromptLineByLine)(file.file, change, prDetails);
-                const aiResponse = yield getAIResponseFn(prompt);
-                if (aiResponse) {
-                    for (const response of aiResponse) {
-                        const newComment = {
-                            body: response.reviewComment,
-                            path: file.file,
-                            line: change.line,
-                        };
-                        comments.push(newComment);
-                    }
-                }
+                return false;
+            // deleted files are not analyzed
+            const changes = file.changes;
+            if (changes.length === 0)
+                return false;
+            if (changes.length > MAX_CHANGES)
+                return false;
+            file.changes = changes;
+            return true;
+        });
+        // Limit total changes to avoid exceeding context length
+        let totalChanges = filteredDiffs.reduce((acc, file) => acc + file.changes.length, 0);
+        if (totalChanges > MAX_TOTAL_CHANGES) {
+            console.warn("Total changes exceed the maximum allowed. Adjusting...");
+            // Implement logic to reduce changes (e.g., prioritize files)
+            // For simplicity, limit the number of files
+            filteredDiffs.splice(MAX_TOTAL_CHANGES);
+        }
+        if (filteredDiffs.length === 0) {
+            console.log("No files to analyze after filtering.");
+            return comments;
+        }
+        const prompt = (0, prompt_1.createPromptForAllFiles)(filteredDiffs, prDetails);
+        const aiResponse = yield getAIResponseFn(prompt);
+        if (aiResponse && Array.isArray(aiResponse)) {
+            for (const response of aiResponse) {
+                const newComment = {
+                    body: response.reviewComment,
+                    path: response.filePath,
+                    line: response.lineNumber,
+                    side: response.changeType === 'deleted' ? 'LEFT' : 'RIGHT',
+                };
+                comments.push(newComment);
             }
         }
         return comments;
@@ -32779,11 +32772,9 @@ function analyzeCode(parsedDiff_1, prDetails_1) {
 }
 function getAIResponse(prompt) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d;
+        var _a, _b;
         const disclaimer = "📌 **Note**: This is an AI-generated comment.";
-        // Determine if the model is an "o1" model (e.g., o1-mini)
         const isO1Model = OPENAI_API_MODEL.includes("o1");
-        // Beta Limitation: https://platform.openai.com/docs/guides/reasoning?reasoning-prompt-examples=coding-planning#beta-limitations 
         const temperature = isO1Model ? 1 : 0.15;
         const top_p = isO1Model ? 1 : 0.95;
         const frequency_penalty = isO1Model ? 0 : 0.2;
@@ -32796,7 +32787,7 @@ function getAIResponse(prompt) {
             presence_penalty: 0,
         };
         try {
-            // Conditionally build the messages array based on whether it's an "o1" model
+            // Only O1 models can take the system message
             const messages = [
                 ...(!isO1Model
                     ? [
@@ -32809,19 +32800,17 @@ function getAIResponse(prompt) {
                 { role: "user", content: prompt },
             ];
             const completion = yield openai.chat.completions.create(Object.assign(Object.assign({}, queryConfig), { messages }));
-            console.log('-----------------------------------------------');
-            console.log((_b = (_a = completion.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim());
-            const responseContent = ((_d = (_c = completion.choices[0].message) === null || _c === void 0 ? void 0 : _c.content) === null || _d === void 0 ? void 0 : _d.trim()) || "{}";
-            const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```/);
-            let jsonString;
-            if (jsonMatch && jsonMatch[1]) {
-                jsonString = jsonMatch[1].trim();
+            const responseContent = ((_b = (_a = completion.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
+            // Parse the JSON directly since we've instructed the AI not to include code fences
+            let parsedResponse;
+            try {
+                parsedResponse = JSON.parse(responseContent);
             }
-            else {
-                // If no code fences are found, assume the entire content is JSON
-                jsonString = responseContent;
+            catch (error) {
+                console.error("Failed to parse JSON:", error);
+                console.error("Response content:", responseContent);
+                return null;
             }
-            const parsedResponse = JSON.parse(jsonString);
             // Ensure the response is in the expected format
             if (Array.isArray(parsedResponse.reviews)) {
                 // Prepend the disclaimer to each review comment
@@ -32829,7 +32818,7 @@ function getAIResponse(prompt) {
             }
             else {
                 console.warn("Unexpected response format:", responseContent);
-                return responseContent;
+                return null;
             }
         }
         catch (error) {
@@ -32840,6 +32829,7 @@ function getAIResponse(prompt) {
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
+        console.log("The following comments will be posted:", comments);
         yield octokit.rest.pulls.createReview({
             owner,
             repo,
@@ -32868,6 +32858,9 @@ function main() {
             if (comments.length > 0) {
                 yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
             }
+            else {
+                console.log("No comments generated by AI.");
+            }
         }
         catch (error) {
             console.error("Error in processing:", error);
@@ -32883,138 +32876,21 @@ if (require.main === require.cache[eval('__filename')]) {
 
 /***/ }),
 
-/***/ 9668:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-// src/getLanguageFromFilePath.ts
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getLanguageFromFilePath = getLanguageFromFilePath;
-function getLanguageFromFilePath(filePath) {
-    var _a, _b;
-    const extension = ((_a = filePath.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || '';
-    const extensionToLanguageMap = {
-        // Web development languages
-        'html': 'html',
-        'htm': 'html',
-        'css': 'css',
-        'scss': 'scss',
-        'less': 'less',
-        'js': 'javascript',
-        'jsx': 'javascript',
-        'ts': 'typescript',
-        'tsx': 'typescript',
-        'vue': 'vue',
-        'svelte': 'svelte',
-        'json': 'json',
-        'xml': 'xml',
-        // Backend and general-purpose languages
-        'py': 'python',
-        'java': 'java',
-        'rb': 'ruby',
-        'php': 'php',
-        'go': 'go',
-        'rs': 'rust',
-        'cs': 'csharp',
-        'c': 'c',
-        'cpp': 'cpp',
-        'cxx': 'cpp',
-        'cc': 'cpp',
-        'kt': 'kotlin',
-        'swift': 'swift',
-        'scala': 'scala',
-        'lua': 'lua',
-        'pl': 'perl',
-        'pm': 'perl',
-        'r': 'r',
-        'dart': 'dart',
-        'm': 'objectivec',
-        'mm': 'objectivecpp',
-        'sh': 'bash',
-        'bat': 'batchfile',
-        'ps1': 'powershell',
-        'clj': 'clojure',
-        'ex': 'elixir',
-        'exs': 'elixir',
-        'erl': 'erlang',
-        'hs': 'haskell',
-        'jl': 'julia',
-        'tsv': 'tsv',
-        'csv': 'csv',
-        'md': 'markdown',
-        'txt': 'text',
-        // Data and configuration formats
-        'yaml': 'yaml',
-        'yml': 'yaml',
-        'toml': 'toml',
-        'ini': 'ini',
-        'config': 'ini',
-        'conf': 'ini',
-        'env': 'dotenv',
-        // Database languages
-        'sql': 'sql',
-        'psql': 'postgresql',
-        // Functional and other languages
-        'elm': 'elm',
-        'fs': 'fsharp',
-        'fsx': 'fsharp',
-        'ml': 'ocaml',
-        'mli': 'ocaml',
-        'nim': 'nim',
-        'coffee': 'coffeescript',
-        // Scripting and markup
-        'awk': 'awk',
-        'groovy': 'groovy',
-        'gradle': 'groovy',
-        'makefile': 'makefile',
-        'mk': 'makefile',
-        // Shells
-        'bash': 'bash',
-        'zsh': 'zsh',
-        'fish': 'fish',
-        // Version control and CI/CD
-        'gitignore': 'gitignore',
-        'dockerfile': 'dockerfile',
-        'jenkinsfile': 'groovy',
-        // Add more mappings as needed
-    };
-    // Handle special filenames without extensions
-    const specialFiles = {
-        'makefile': 'makefile',
-        'dockerfile': 'dockerfile',
-        '.bashrc': 'bash',
-        '.bash_profile': 'bash',
-        '.zshrc': 'zsh',
-        '.gitignore': 'gitignore',
-        'jenkinsfile': 'groovy',
-    };
-    const fileName = ((_b = filePath.split('/').pop()) === null || _b === void 0 ? void 0 : _b.toLowerCase()) || '';
-    if (specialFiles[fileName]) {
-        return specialFiles[fileName];
-    }
-    return extensionToLanguageMap[extension] || '';
-}
-
-
-/***/ }),
-
 /***/ 705:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+/***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createPromptLineByLine = createPromptLineByLine;
 exports.createPromptFileByFile = createPromptFileByFile;
-exports.createPromptEverythingTogether = createPromptEverythingTogether;
-const get_lang_from_file_path_1 = __nccwpck_require__(9668);
+exports.createPromptForAllFiles = createPromptForAllFiles;
 function createPromptLineByLine(filePath, change, prDetails) {
     // const changeDescription = change.type === "added"
     //   ? "This is a new line of code that was added. Please review it for correctness, efficiency, and adherence to best practices. Does this code improve the existing functionality or introduce potential issues?"
     //   : "This is a line of code that was deleted. Please review whether removing this line might negatively impact functionality, introduce bugs, or remove important logic. Is this deletion justified and safe?";
     return `Your task is to review pull requests. Instructions:
-- Provide the response in JSON format without any markdown or code fences: {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
 - Do not give positive comments or compliments.
 - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
 - Write the comment in GitHub Markdown format.
@@ -33036,108 +32912,68 @@ ${change.line} ${change.content}
 \`\`\`
 `;
 }
-function createPromptFileByFile(filePath, changes, prDetails, fullFileContent) {
-    const changeDescription = "Below are the code changes made to the file. Please review them comprehensively.";
-    return `You are an expert code reviewer. Your task is to analyze the code changes made in the file \`${filePath}\` and provide constructive feedback focusing on:
+function createPromptFileByFile(filePath, changes, prDetails) {
+    const diffContent = changes
+        .map((change) => {
+        const sign = change.type === "added" ? "+" : "-";
+        return `${sign} ${change.content}`;
+    })
+        .join("\n");
+    return `Your task is to review pull requests. Instructions:
+- Provide the response in JSON format without any markdown or code fences: {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+- Do not give positive comments or compliments.
+- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
+- Write the comment in GitHub Markdown format.
+- Use the given description only for the overall context and only comment on the code.
+- IMPORTANT: NEVER suggest adding comments to the code.
 
-- Correctness
-- Efficiency
-- Security vulnerabilities
-- Compliance with coding standards and best practices
-- Readability and maintainability
+Review the following code diff in the file "${filePath}" and take the pull request title and description into account when writing the response.
 
-**Instructions:**
+Pull request title: ${prDetails.title}
+Pull request description:
 
-- Review the changes in the context of the entire file.
-- Reference specific lines in your feedback.
-- **Avoid mentioning irrelevant or unchanged code.**
-
-**Response Format:**
-
-Provide your feedback in the following JSON format:
-
-\`\`\`json
-[
-  {
-    "lineNumber": <line_number>,
-    "reviewComment": "<Your comment here>"
-  }
-  // Add more comments as needed
-]
-\`\`\`
-
-**Pull Request Details:**
-
-- **Title:** ${prDetails.title}
-- **Description:**
-
+---
 ${prDetails.description}
+---
 
-**File:** ${filePath}
-
-**Code After Changes:**
-
-\`\`\`${(0, get_lang_from_file_path_1.getLanguageFromFilePath)(filePath)}
-${fullFileContent}
-\`\`\`
-`;
-}
-function createPromptEverythingTogether(allChanges, prDetails) {
-    const changeDescription = "Below are the code changes made across multiple files. Please review them comprehensively.";
-    let diffContent = "";
-    for (const file of allChanges) {
-        diffContent += `--- a/${file.file}\n+++ b/${file.file}\n`;
-        diffContent += file.changes
-            .map((change) => {
-            const sign = change.type === "added" ? "+" : "-";
-            return `${sign}${change.content}`;
-        })
-            .join("\n");
-        diffContent += "\n";
-    }
-    return `As an experienced code reviewer, your task is to analyze the code changes made across multiple files and provide detailed feedback focusing on:
-
-- Overall architecture and design considerations
-- Interactions between different parts of the codebase
-- Potential integration issues
-- Correctness, efficiency, and security
-- Compliance with coding standards and best practices
-
-**Instructions:**
-
-- Review the changes in the context of the entire project.
-- Reference specific files and lines in your feedback.
-- **Provide high-level insights as well as specific comments where necessary.**
-
-**Response Format:**
-
-Provide your feedback in the following JSON format:
-
-\`\`\`json
-[
-  {
-    "filePath": "<file_path>",
-    "lineNumber": <line_number>,
-    "reviewComment": "<Your comment here>"
-  },
-  // Add more comments as needed
-]
-\`\`\`
-
-**Pull Request Details:**
-
-- **Title:** ${prDetails.title}
-- **Description:**
-
-${prDetails.description}
-
-**Code Changes:**
-
-${changeDescription}
-
+Git diff to review:
 \`\`\`diff
 ${diffContent}
 \`\`\`
+`;
+}
+function createPromptForAllFiles(files, prDetails) {
+    let diffContents = files
+        .map((file) => {
+        const diffContent = file.changes
+            .map((change) => {
+            const sign = change.type === "added" ? "+" : "-";
+            return `${sign} ${change.content}`;
+        })
+            .join("\n");
+        return `Diff for file "${file.file}":\n\`\`\`diff\n${diffContent}\n\`\`\``;
+    })
+        .join("\n\n");
+    return `Your task is to review pull requests. Instructions:
+- Provide the response in JSON format without any markdown or code fences: {"reviews": [{"filePath": "<file path>", "lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+- Do not give positive comments or compliments.
+- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
+- Write the comment in GitHub Markdown format.
+- Use the given description only for the overall context and only comment on the code.
+- IMPORTANT: NEVER suggest adding comments to the code.
+
+Review the following code diffs and take the pull request title and description into account when writing the response.
+
+Pull request title: ${prDetails.title}
+Pull request description:
+
+---
+${prDetails.description}
+---
+
+Git diffs to review:
+
+${diffContents}
 `;
 }
 
